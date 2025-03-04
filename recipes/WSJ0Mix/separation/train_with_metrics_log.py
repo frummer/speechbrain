@@ -26,6 +26,7 @@ import os
 import sys
 
 import numpy as np
+from leakage_utils import compute_leakage_for_pair
 import torch
 import torch.nn.functional as F
 import torchaudio
@@ -330,7 +331,10 @@ class Separation(sb.Brain):
 
         all_sdrs = []
         all_unseparation_values = []
-
+        window_sizes = [2048, 4096, 8192]
+        # We'll keep a dictionary of lists, keyed by window_size.
+        leakage_means_per_utterance = {ws: [] for ws in window_sizes}
+        leakage_max_per_utterance   = {ws: [] for ws in window_sizes}
         # Load the validation/test dataset
         # If dataset is already a DataLoader or LoopedLoader, skip make_dataloader
         if isinstance(dataset, (sb.dataio.dataloader.SaveableDataLoader, sb.dataio.dataloader.LoopedLoader)):
@@ -365,14 +369,51 @@ class Separation(sb.Brain):
 
                     all_sdrs.append(sdr.mean())
                     all_unseparation_values.append(unseparation_score)
+                    if predictions.shape[-1] >= 2:
+                        # Take the first item in batch, speaker1, speaker2
+                        pred_spk1 = predictions[0, :, 0].cpu().numpy()
+                        pred_spk2 = predictions[0, :, 1].cpu().numpy()
 
+                        for ws in window_sizes:
+                            # get all window correlations
+                            corrs = compute_leakage_for_pair(pred_spk1, pred_spk2, ws)
+                            if len(corrs) > 0:
+                                leakage_means_per_utterance[ws].append(np.nanmean(corrs))
+                                leakage_max_per_utterance[ws].append(np.nanmax(corrs))
+                            else:
+                                # If no valid window found, we can store 0 or np.nan
+                                leakage_means_per_utterance[ws].append(np.nan)
+                                leakage_max_per_utterance[ws].append(np.nan)
         # Compute averages
         avg_sdr = np.mean(all_sdrs)
         avg_unsep = np.mean(all_unseparation_values)
 
-        #logger.info(f"{stage} - Mean SDR: {avg_sdr:.4f}, Mean Unseparation: {avg_unsep:.4f}")
-        
-        return avg_unsep  # You can return both if needed
+        leakage_stats = {}
+        for ws in window_sizes:
+            valid_means = [x for x in leakage_means_per_utterance[ws] if not np.isnan(x)]
+            valid_maxes = [x for x in leakage_max_per_utterance[ws] if not np.isnan(x)]
+            if len(valid_means) > 0:
+                mean_leakage = np.mean(valid_means)
+                max_leakage  = np.mean(valid_maxes)  # or maybe you want the overall max
+            else:
+                # If everything was silent, fallback to 0 or NaN
+                mean_leakage = np.nan
+                max_leakage = np.nan
+
+            leakage_stats[ws] = {
+                "mean_leakage": mean_leakage,
+                "max_leakage":  max_leakage,
+            }
+        logger.info(f"{stage} - Mean SDR: {avg_sdr:.4f}, Mean Unseparation: {avg_unsep:.4f}")
+        for ws in window_sizes:
+            mean_val = leakage_stats[ws]["mean_leakage"]
+            max_val  = leakage_stats[ws]["max_leakage"]
+            logger.info(
+                f"{stage} - Window size {ws}: "
+                f"Mean leakage = {mean_val if not np.isnan(mean_val) else 'NaN'}, "
+                f"Max leakage = {max_val if not np.isnan(max_val) else 'NaN'}"
+            )
+        return avg_unsep, leakage_stats  # You can return both if needed
     
     def on_stage_end(self, stage, stage_loss, epoch, dataset=None):
         """Gets called at the end of a epoch."""
@@ -381,8 +422,11 @@ class Separation(sb.Brain):
         unsep_score = None  # This ensures the variable is always defined
             # Compute custom metrics for validation and test stages
         if stage in [sb.Stage.TRAIN, sb.Stage.VALID, sb.Stage.TEST] and dataset is not None:
-            unsep_score = self.compute_metric(dataset, stage)
+            unsep_score, leakage_stats = self.compute_metric(dataset, stage)
             stage_stats["unseparation"] = unsep_score
+            for ws, vals in leakage_stats.items():
+                stage_stats[f"leakage_{ws}_mean"] = vals["mean_leakage"]
+                stage_stats[f"leakage_{ws}_max"]  = vals["max_leakage"]
         # ✅ Ensure it has a default value before using it
         unsep_value = unsep_score if unsep_score is not None else "N/A"
         if stage == sb.Stage.TRAIN:

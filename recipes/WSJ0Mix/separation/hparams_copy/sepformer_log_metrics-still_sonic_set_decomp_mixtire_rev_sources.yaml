@@ -40,7 +40,7 @@ save_audio: True # Save estimated sources on disk
 sample_rate: 8000
 
 ####################### Training Parameters ####################################
-N_epochs: 200
+N_epochs: 20
 batch_size: 1
 lr: 0.00015
 clip_grad_norm: 5
@@ -188,7 +188,7 @@ train_logger: !new:speechbrain.utils.train_logger.WandBLogger
         # remove or update entity to your actual username or personal/team entity
         entity: frummer28-johns-hopkins-university
         project: sepformer
-        name: "sepformer_run"
+        name: "sepformer_unspearation_and_leakage"
         reinit: True
         resume: allow
         dir: !ref <output_folder>/wandb
