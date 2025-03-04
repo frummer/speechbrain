@@ -42,6 +42,71 @@ from speechbrain.utils.logger import get_logger
 
 # Define training procedure
 class Separation(sb.Brain):
+    def evaluate(
+        self,
+        test_set,
+        max_key=None,
+        min_key=None,
+        progressbar=None,
+        test_loader_kwargs={},
+    ):
+        """
+        Evaluate brain performance on a test set, and compute unseparation
+        for the entire test_set by calling `on_stage_end(Stage.TEST, dataset=...)`.
+        """
+        # By default, load the best checkpoint:
+        self.on_evaluate_start(max_key=max_key, min_key=min_key)
+
+        if progressbar is None:
+            progressbar = not self.noprogressbar
+        enable = progressbar and sb.utils.distributed.if_main_process()
+
+        # Turn a Dataset into a DataLoader if needed:
+        if not (
+            isinstance(test_set, sb.dataio.dataloader.SaveableDataLoader)
+            or isinstance(test_set, sb.dataio.dataloader.LoopedLoader)
+        ):
+            # Prevent the test dataloader from being saved as a checkpoint:
+            test_loader_kwargs["ckpt_prefix"] = None
+            test_set = self.make_dataloader(test_set, stage=sb.Stage.TEST, **test_loader_kwargs)
+
+        # Standard SB calls:
+        self.on_stage_start(sb.Stage.TEST, epoch=None)
+        self.modules.eval()
+
+        avg_test_loss = 0.0
+        with torch.no_grad():
+            for batch in tqdm(test_set, disable=not enable, colour=self.tqdm_barcolor["test"]):
+                self.step += 1
+                loss = self.evaluate_batch(batch, stage=sb.Stage.TEST)
+                avg_test_loss = self.update_average(loss, avg_test_loss)
+
+                if self.debug and self.step == self.debug_batches:
+                    break
+                
+        self.on_stage_end(sb.Stage.TEST, avg_test_loss, epoch=None, dataset=test_set)
+        self.step = 0    
+
+    def _fit_train(self, train_set, epoch, enable):
+        """
+        Override _fit_train so that after the usual training loop,
+        we can call `on_stage_end(Stage.TRAIN, ...)` with the train dataset.
+        This allows unseparation metric (or others) to be computed on the training set.
+        """
+        # 1) Call the standard (parent) training loop
+        super()._fit_train(train_set, epoch, enable)
+
+        # 2) After finishing the training loop, compute any metrics by calling on_stage_end with dataset
+        self.on_stage_end(
+            sb.Stage.TRAIN,
+            self.avg_train_loss,  # the final training loss
+            epoch,
+            dataset=train_set,    # pass train_set so we can compute the metric
+        )
+        # 3) Reset counters for the next epoch
+        self.avg_train_loss = 0.0
+        self.step = 0
+        
     def _fit_valid(self, valid_set, epoch, enable):
         """Custom validation loop that passes dataset to on_stage_end()."""
         if valid_set is not None:
@@ -58,9 +123,7 @@ class Separation(sb.Brain):
                         break
 
             self.step = 0
-            # ✅ pass dataset=valid_set
             self.on_stage_end(sb.Stage.VALID, avg_valid_loss, epoch, dataset=valid_set)
-            # reset for next epoch
             self.avg_valid_loss = 0.0
 
     def compute_forward(self, mix, targets, stage, noise=None):
@@ -317,7 +380,7 @@ class Separation(sb.Brain):
         stage_stats = {"si-snr": stage_loss}
         unsep_score = None  # This ensures the variable is always defined
             # Compute custom metrics for validation and test stages
-        if stage in [sb.Stage.VALID, sb.Stage.TEST] and dataset is not None:
+        if stage in [sb.Stage.TRAIN, sb.Stage.VALID, sb.Stage.TEST] and dataset is not None:
             unsep_score = self.compute_metric(dataset, stage)
             stage_stats["unseparation"] = unsep_score
         # ✅ Ensure it has a default value before using it
@@ -339,10 +402,10 @@ class Separation(sb.Brain):
                 else:
                     unsep_str = f"{unsep_score:.4f}"
 
-                # logger.info(
-                #     f"Epoch {epoch} - {stage.name} SI-SNR: {stage_stats['si-snr']:.4f}, "
-                #     f"Unseparation-correlation: {unsep_str}, LR: {current_lr:.6e}"
-                # )
+                logger.info(
+                    f"Epoch {epoch} - {stage.name} SI-SNR: {stage_stats['si-snr']:.4f}, "
+                    f"Unseparation-correlation: {unsep_str}, LR: {current_lr:.6e}"
+                )
                 schedulers.update_learning_rate(self.optimizer, next_lr)
             else:
                 # if we do not use the reducelronplateau, we do not change the lr
