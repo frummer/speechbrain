@@ -1,0 +1,92 @@
+Script started at: Mon Mar  3 11:28:34 PM EST 2025
+train sepformer still_sonic_set_v1_reverb_sources_noisy_decomp_mix dataset using 4 GPUS
+Mon Mar  3 23:28:34 2025       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.161.07             Driver Version: 535.161.07   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA GeForce GTX 1080 Ti     Off | 00000000:D9:00.0 Off |                  N/A |
+| 23%   17C    P8               8W / 250W |      2MiB / 11264MiB |      0%   E. Process |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|  No running processes found                                                           |
++---------------------------------------------------------------------------------------+
+CUDA_VISIBLE_DEVICES=0
+speechbrain.utils.quirks - Applied quirks (see `speechbrain.utils.quirks`): [allow_tf32, disable_jit_profiling]
+speechbrain.utils.quirks - Excluded quirks specified by the `SB_DISABLE_QUIRKS` environment (comma-separated list): []
+speechbrain.core - Beginning experiment!
+speechbrain.core - Experiment folder: /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log
+Creating a csv file for a custom dataset
+speechbrain.core - Info: precision arg from hparam file is used
+speechbrain.core - Info: noprogressbar arg from hparam file is used
+speechbrain.core - Gradscaler enabled: False. Using precision: fp32.
+speechbrain.core - Separation Model Statistics:
+* Total Number of Trainable Parameters: 6.7M
+* Total Number of Parameters: 6.7M
+* Trainable Parameters represent 100.0000% of the total size.
+speechbrain.utils.checkpoints - Loading a checkpoint from /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+22-46-19+00
+speechbrain.utils.epoch_loop - Going into epoch 56
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-28-56+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+22-46-14+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+22-46-19+00
+speechbrain.utils.epoch_loop - Going into epoch 57
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-01+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-28-56+00
+speechbrain.utils.epoch_loop - Going into epoch 58
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-06+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-01+00
+speechbrain.utils.epoch_loop - Going into epoch 59
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-11+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-06+00
+speechbrain.utils.epoch_loop - Going into epoch 60
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-16+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-11+00
+speechbrain.utils.epoch_loop - Going into epoch 61
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-20+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-16+00
+speechbrain.utils.epoch_loop - Going into epoch 62
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-25+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-20+00
+speechbrain.utils.epoch_loop - Going into epoch 63
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-30+00
+speechbrain.utils.epoch_loop - Going into epoch 64
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-34+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-30+00
+speechbrain.utils.epoch_loop - Going into epoch 65
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-39+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-34+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-25+00
+speechbrain.utils.epoch_loop - Going into epoch 66
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-44+00
+speechbrain.utils.epoch_loop - Going into epoch 67
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-49+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-44+00
+speechbrain.utils.epoch_loop - Going into epoch 68
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-53+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-39+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-49+00
+speechbrain.utils.epoch_loop - Going into epoch 69
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-58+00
+speechbrain.utils.epoch_loop - Going into epoch 70
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-30-03+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-58+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-29-53+00
+speechbrain.utils.epoch_loop - Going into epoch 71
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-30-08+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-30-03+00
+speechbrain.utils.epoch_loop - Going into epoch 72
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-30-13+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-30-08+00
+speechbrain.utils.epoch_loop - Going into epoch 73
+speechbrain.utils.checkpoints - Saved an end-of-epoch checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-30-18+00
+speechbrain.utils.checkpoints - Deleted checkpoint in /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log/save/CKPT+2025-03-03+23-30-13+00
+speechbrain.utils.epoch_loop - Going into epoch 74

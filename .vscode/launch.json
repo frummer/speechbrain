@@ -1,0 +1,19 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Debug sepformer",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "args": ["/home/afrumme1/speechbrain/recipes/WSJ0Mix/separation/hparams/inference_sepformer_common-voice.yaml", "--data_folder", "/export/fs05/afrumme1/commonvoice_experiment", "--test_only", "--device", "cpu"],
+            "cwd": "/export/fs05/afrumme1/common_voice_inference_test",
+            "python": "/home/afrumme1/miniconda3/envs/speechbrain/bin/python",  // Specify the path to your Conda environment's Python
+            "justMyCode": false
+        }
+    ]
+}
