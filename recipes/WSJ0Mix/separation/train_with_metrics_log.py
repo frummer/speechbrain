@@ -27,6 +27,7 @@ import sys
 
 import numpy as np
 from leakage_utils import compute_leakage_for_pair
+from ellipsis_utils import compute_ellipsis_metric
 import torch
 import torch.nn.functional as F
 import torchaudio
@@ -320,7 +321,7 @@ class Separation(sb.Brain):
                 # Compute correlation
                 corr_matrix = np.corrcoef(track1, track2)
                 correlation = corr_matrix[0, 1]
-                unsep_values.append(abs(correlation))  # Take absolute value for consistency
+                unsep_values.append(correlation)  # Take absolute value for consistency
         
         # Average over all pairs
         return np.mean(unsep_values)
@@ -331,6 +332,11 @@ class Separation(sb.Brain):
 
         all_sdrs = []
         all_unseparation_values = []
+        
+        # For ellipsis metric
+        ellip_mse_list = []
+        ellip_corr_list = []
+        
         window_sizes = [2048, 4096, 8192]
         # We'll keep a dictionary of lists, keyed by window_size.
         leakage_means_per_utterance = {ws: [] for ws in window_sizes}
@@ -384,10 +390,22 @@ class Separation(sb.Brain):
                                 # If no valid window found, we can store 0 or np.nan
                                 leakage_means_per_utterance[ws].append(np.nan)
                                 leakage_max_per_utterance[ws].append(np.nan)
+                                
+                    mix_np = mixture[0][0].cpu().numpy()   # shape (T,)
+                    # Grab the same separated signals used in leakage
+                    if predictions.shape[-1] >= 2:
+                        ellip_mse, ellip_corr, w = compute_ellipsis_metric(mix_np, pred_spk1, pred_spk2)
+                        ellip_mse_list.append(ellip_mse)
+                        ellip_corr_list.append(ellip_corr)
+                    else:
+                        # If <2 separated sources, store fallback
+                        ellip_mse_list.append(np.nan)
+                        ellip_corr_list.append(np.nan)
         # Compute averages
         avg_sdr = np.mean(all_sdrs)
         avg_unsep = np.mean(all_unseparation_values)
-
+        avg_ellip_mse = np.nanmean(ellip_mse_list)
+        avg_ellip_corr = np.nanmean(ellip_corr_list)
         leakage_stats = {}
         for ws in window_sizes:
             valid_means = [x for x in leakage_means_per_utterance[ws] if not np.isnan(x)]
@@ -404,7 +422,11 @@ class Separation(sb.Brain):
                 "mean_leakage": mean_leakage,
                 "max_leakage":  max_leakage,
             }
+            
+        # Console logs
         logger.info(f"{stage} - Mean SDR: {avg_sdr:.4f}, Mean Unseparation: {avg_unsep:.4f}")
+        logger.info(f"{stage} - Ellipsis MSE: {avg_ellip_mse:.6f}, Corr: {avg_ellip_corr:.6f}")
+
         for ws in window_sizes:
             mean_val = leakage_stats[ws]["mean_leakage"]
             max_val  = leakage_stats[ws]["max_leakage"]
@@ -413,7 +435,14 @@ class Separation(sb.Brain):
                 f"Mean leakage = {mean_val if not np.isnan(mean_val) else 'NaN'}, "
                 f"Max leakage = {max_val if not np.isnan(max_val) else 'NaN'}"
             )
-        return avg_unsep, leakage_stats  # You can return both if needed
+        metrics_dict = {
+        "sdr":         float(avg_sdr),
+        "unseparation": float(avg_unsep),
+        "ellip_mse":   float(avg_ellip_mse),
+        "ellip_corr":  float(avg_ellip_corr),
+        "leakage":     leakage_stats,
+        }
+        return metrics_dict  # You can return both if needed
     
     def on_stage_end(self, stage, stage_loss, epoch, dataset=None):
         """Gets called at the end of a epoch."""
@@ -421,10 +450,16 @@ class Separation(sb.Brain):
         stage_stats = {"si-snr": stage_loss}
         unsep_score = None  # This ensures the variable is always defined
             # Compute custom metrics for validation and test stages
-        if stage in [sb.Stage.TRAIN, sb.Stage.VALID, sb.Stage.TEST] and dataset is not None:
-            unsep_score, leakage_stats = self.compute_metric(dataset, stage)
-            stage_stats["unseparation"] = unsep_score
-            for ws, vals in leakage_stats.items():
+        if dataset is not None:
+            all_metrics = self.compute_metric(dataset, stage)
+            # Merge relevant keys
+            stage_stats["sdr"] = all_metrics["sdr"]
+            stage_stats["unseparation"] = all_metrics["unseparation"]
+            stage_stats["ellip_mse"] = all_metrics["ellip_mse"]
+            stage_stats["ellip_corr"] = all_metrics["ellip_corr"]
+
+            # If you want to flatten out the leakage stats:
+            for ws, vals in all_metrics["leakage"].items():
                 stage_stats[f"leakage_{ws}_mean"] = vals["mean_leakage"]
                 stage_stats[f"leakage_{ws}_max"]  = vals["max_leakage"]
         # ✅ Ensure it has a default value before using it
