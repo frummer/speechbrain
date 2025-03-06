@@ -32,12 +32,10 @@ import torch
 import torch.nn.functional as F
 import torchaudio
 from hyperpyyaml import load_hyperpyyaml
-import concurrent.futures
 from tqdm import tqdm
-import torch.utils.data as data
 if os.environ.get("RANK", os.environ.get("LOCAL_RANK", "0")) != "0":
     os.environ["WANDB_MODE"] = "disabled"
-import wandb
+
 import speechbrain as sb
 import speechbrain.nnet.schedulers as schedulers
 from speechbrain.core import AMPConfig
@@ -151,7 +149,7 @@ class Separation(sb.Brain):
             print(f"[ERROR] Failed to concatenate targets: {e}")
 
             # Create a directory to save error samples
-            error_dir = "/export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log_errors"
+            error_dir = "error_samples"
             os.makedirs(error_dir, exist_ok=True)
 
             # Save mix waveform
@@ -489,7 +487,7 @@ class Separation(sb.Brain):
         # Compute/store important stats
         stage_stats = {"si-snr": stage_loss}
             # Compute custom metrics for validation and test stages
-        if (stage == sb.Stage.VALID or stage == sb.Stage.TEST) and dataset is not None:
+        if dataset is not None:
             all_metrics = self.compute_metric(dataset, stage)
             # Merge relevant keys
             stage_stats["sdr"] = all_metrics["sdr"]
@@ -519,6 +517,8 @@ class Separation(sb.Brain):
                 else:
                     # if we do not use the reducelronplateau, we do not change the lr
                     current_lr = self.hparams.optimizer.optim.param_groups[0]["lr"]
+                    unsep_value = stage_stats.get("unseparation", None)
+                    unsep_str = f"{unsep_value:.4f}" if isinstance(unsep_value, (int, float)) else "N/A"
                 self.hparams.train_logger.log_stats(
                     stats_meta={"epoch": epoch, "lr": current_lr},
                     train_stats=self.train_stats,
@@ -803,49 +803,6 @@ def dataio_prep(hparams):
 
     return train_data, valid_data, test_data
 
-def check_sample(idx, dataset, num_spks):
-    """
-    Checks a single sample for problematic targets.
-    
-    Returns:
-      - None if the sample is OK.
-      - A tuple (idx, spk_idx) if the target for speaker spk_idx is empty.
-      - A tuple (idx, "missing key", key) if an expected key is missing.
-      - A tuple (idx, "exception", str(e)) if any other exception occurs.
-    """
-    try:
-        sample = dataset[idx]
-        # Iterate over expected number of speakers (assuming keys are s1_sig, s2_sig, etc.)
-        for i in range(num_spks):
-            key = f's{i+1}_sig'
-            if key not in sample:
-                return (idx, "missing key", key)
-            target = sample[key]
-            if target.numel() == 0:
-                return (idx, i)
-        return None  # sample is valid
-    except Exception as e:
-        return (idx, "exception", str(e))
-
-def scan_problematic_samples(dataset, num_spks, num_workers=4):
-    """
-    Scans the entire dataset using a ThreadPoolExecutor.
-    
-    Returns a list of problematic sample indicators.
-    """
-    problematic_samples = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-        futures = {
-            executor.submit(check_sample, idx, dataset, num_spks): idx
-            for idx in range(len(dataset))
-        }
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Scanning samples"):
-            result = future.result()
-            if result is not None:
-                print(f"[WARNING] Problematic sample found: {result}",flush=True)
-                problematic_samples.append(result)
-    return problematic_samples
-
 
 if __name__ == "__main__":
     # Load hyperparameters file with command-line overrides
@@ -944,40 +901,7 @@ if __name__ == "__main__":
         _, valid_data, test_data = dataio_prep(hparams)
     else:
         train_data, valid_data, test_data = dataio_prep(hparams)
-        print("in else - no dynamic mixing")
 
-
-    # # Example: Print a sample from train_data for debugging.
-    # print(f"train_data[0]: {train_data[0]}")
-    # print(f"Original training set size: {len(train_data)}")
-    
-    # print("Scanning training data for problematic samples using multiprocessing...")
-    # bad_samples_train = scan_problematic_samples(train_data, hparams["num_spks"], num_workers=8)
-    # if bad_samples_train:
-    #     print(f"Found {len(bad_samples_train)} problematic samples in the training set:")
-    #     for item in bad_samples_train:
-    #         print(item)
-    # else:
-    #     print("No problematic samples found in the training set.")
-    
-    # print("Scanning validation data for problematic samples...")
-    # bad_samples_valid = scan_problematic_samples(valid_data, hparams["num_spks"], num_workers=8)
-    # if bad_samples_valid:
-    #     print(f"Found {len(bad_samples_valid)} problematic samples in the validation set:")
-    #     for item in bad_samples_valid:
-    #         print(item)
-    # else:
-    #     print("No problematic samples found in the validation set.")
-    
-    # print("Scanning test data for problematic samples...")
-    # bad_samples_test = scan_problematic_samples(test_data, hparams["num_spks"], num_workers=8)
-    # if bad_samples_test:
-    #     print(f"Found {len(bad_samples_test)} problematic samples in the test set:")
-    #     for item in bad_samples_test:
-    #         print(item)
-    # else:
-    #     print("No problematic samples found in the test set.")
-        
     # Load pretrained model if pretrained_separator is present in the yaml
     if "pretrained_separator" in hparams:
         run_on_main(hparams["pretrained_separator"].collect_files)

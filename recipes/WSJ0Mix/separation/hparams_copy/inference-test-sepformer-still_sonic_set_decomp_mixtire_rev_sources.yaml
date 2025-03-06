@@ -23,12 +23,12 @@ data_folder: /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_
 base_folder_dm: /yourpath/wsj0-processed/si_tr_s/
 
 experiment_name: inference_sepformer_still_sonic_set_v1_reverb_sources_noisy_decomp_mix
-output_folder: /export/fs05/afrumme1/sepformer_training/valid_inference_still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results
+output_folder: /export/fs05/afrumme1/sepformer_training/test_inference_still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 train_data: !ref <save_folder>/custom_train.csv
 valid_data: !ref <save_folder>/custom_valid.csv
-test_data: !ref <save_folder>/custom_valid.csv
+test_data: !ref <save_folder>/custom_test.csv
 skip_prep: False
 
 
