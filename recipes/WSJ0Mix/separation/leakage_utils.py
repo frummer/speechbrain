@@ -15,9 +15,11 @@ def is_silent(audio_window: np.ndarray,
 def compute_leakage_for_pair(
     data1: np.ndarray, 
     data2: np.ndarray, 
-    window_size: int, 
+    window_size: int,
+    stage,
     silence_rms_threshold: float = 1e-4, 
-    mean_amplitude_threshold: float = 1e-4
+    mean_amplitude_threshold: float = 1e-4,
+
 ):
     """
     Computes the correlation over sliding windows between data1 and data2.

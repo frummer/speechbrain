@@ -9,7 +9,6 @@
 #SBATCH --error=/export/fs05/afrumme1/git/speechbrain/logs/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_log_metrics_multi_gpu/extract.err
 #SBATCH --output=/export/fs05/afrumme1/git/speechbrain/logs/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_log_metrics_multi_gpu/extract.out
 #SBATCH --mail-user=afrumme1@jh.edu  #email for reporting
-#SBATCH --mail-user=afrumme1@jh.edu  #email for reporting
 #SBATCH --mail-type=END,FAIL,BEGIN
 
 echo "Script started at: $(date)"
