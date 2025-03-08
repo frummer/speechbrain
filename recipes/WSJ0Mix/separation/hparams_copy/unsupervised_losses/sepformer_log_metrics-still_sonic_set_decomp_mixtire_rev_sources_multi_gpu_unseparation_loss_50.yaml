@@ -22,8 +22,8 @@ data_folder: /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_
 # you can do this conversion with the script ../meta/preprocess_dynamic_mixing.py
 base_folder_dm: /yourpath/wsj0-processed/si_tr_s/
 
-experiment_name: inference_sepformer_still_sonic_set_v1_reverb_sources_noisy_decomp_mix
-output_folder: !ref /export/fs05/afrumme1/sepformer_training/inference_still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results
+experiment_name: corr_loss_sepformer_still_sonic_set_v1_reverb_sources_noisy_decomp_mix_metrics_logs
+output_folder: !ref /export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log_multi_gpu_corr_loss_50
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 train_data: !ref <save_folder>/custom_train.csv
@@ -158,7 +158,8 @@ optimizer: !name:torch.optim.Adam
     lr: !ref <lr>
     weight_decay: 0
 
-loss: !name:speechbrain.nnet.losses.get_si_snr_with_pitwrapper
+loss: !new:speechbrain.nnet.unsupervised_losses.custom_loss.WeightedSiSNRCorrelation
+    alpha: 0.5
 
 lr_scheduler: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
     factor: 0.5
@@ -182,18 +183,13 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
         counter: !ref <epoch_counter>
         lr_scheduler: !ref <lr_scheduler>
 
-train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
-    save_file: !ref <train_log>
-
-# Pretrained Separator Configuration
-# If you do not want to use the pretrained separator, you can delete the pretrained_separator field.
-pretrained_separator: !new:speechbrain.utils.parameter_transfer.Pretrainer
-    collect_in: /home/afrumme1/Fast-GeCo-inference/CKPT+2025-03-03+16-08-25+00  # Where the loaded parameters will be saved
-    loadables:
-        encoder: !ref <Encoder>  # Match with module names in your script
-        decoder: !ref <Decoder>
-        masknet: !ref <MaskNet>
-    paths:
-        encoder: /home/afrumme1/Fast-GeCo-inference/CKPT+2025-03-03+16-08-25+00/encoder.ckpt
-        decoder: /home/afrumme1/Fast-GeCo-inference/CKPT+2025-03-03+16-08-25+00/decoder.ckpt
-        masknet: /home/afrumme1/Fast-GeCo-inference/CKPT+2025-03-03+16-08-25+00/masknet.ckpt
+train_logger: !new:speechbrain.utils.train_logger.WandBLogger
+    initializer: 
+        !name:wandb.init
+        # remove or update entity to your actual username or personal/team entity
+        entity: frummer28-johns-hopkins-university
+        project: sepformer
+        name: "still_sonic_set_v1_reverberent_sources_noisy_decompressed_mixture_log_metrics_corr_loss_50"
+        reinit: True
+        resume: allow
+        dir: !ref <output_folder>

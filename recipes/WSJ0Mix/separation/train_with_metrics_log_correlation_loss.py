@@ -32,15 +32,18 @@ import torch
 import torch.nn.functional as F
 import torchaudio
 from hyperpyyaml import load_hyperpyyaml
+import concurrent.futures
 from tqdm import tqdm
+import torch.utils.data as data
 if os.environ.get("RANK", os.environ.get("LOCAL_RANK", "0")) != "0":
     os.environ["WANDB_MODE"] = "disabled"
-
+import wandb
 import speechbrain as sb
 import speechbrain.nnet.schedulers as schedulers
 from speechbrain.core import AMPConfig
 from speechbrain.utils.distributed import run_on_main
 from speechbrain.utils.logger import get_logger
+from torch.utils.data import Subset
 
 
 # Define training procedure
@@ -87,47 +90,33 @@ class Separation(sb.Brain):
                 if self.debug and self.step == self.debug_batches:
                     break
                 
-        self.on_stage_end(sb.Stage.TEST, avg_test_loss, epoch=None, dataset=test_set)
+        self.on_stage_end(sb.Stage.TEST, avg_test_loss, epoch=None)
         self.step = 0    
 
     def _fit_train(self, train_set, epoch, enable):
-        """
-        Override _fit_train so that after the usual training loop,
-        we can call `on_stage_end(Stage.TRAIN, ...)` with the train dataset.
-        This allows unseparation metric (or others) to be computed on the training set.
-        """
-        # 1) Call the standard (parent) training loop
+         # 1) Call the standard (parent) training loop
         super()._fit_train(train_set, epoch, enable)
+        """Custom validation loop that passes dataset to on_stage_end()."""
+        # Create a subset of the underlying dataset with the first 5 indices.
+        subset_dataset = Subset(train_set.dataset, list(range(2000)))
 
-        # 2) After finishing the training loop, compute any metrics by calling on_stage_end with dataset
-        self.on_stage_end(
-            sb.Stage.TRAIN,
-            self.avg_train_loss,  # the final training loss
-            epoch,
-            dataset=train_set,    # pass train_set so we can compute the metric
+        # Re-create a SaveableDataLoader for the subset using the same parameters as train_set.
+        subset_dataloader = sb.dataio.dataloader.SaveableDataLoader(
+            subset_dataset,
+            batch_size=train_set.batch_size,     # use the same batch size
+            shuffle=False,                       # disable shuffling for logging, if needed
+            collate_fn=train_set.collate_fn,     # use the same collate function
+            # ... include any other parameters from train_set that are needed
         )
-        # 3) Reset counters for the next epoch
-        self.avg_train_loss = 0.0
-        self.step = 0
+        if sb.utils.distributed.if_main_process():
+            self.log_unsupervies_metrics(stage=sb.Stage.TRAIN, epoch=epoch, dataset=subset_dataloader)
         
     def _fit_valid(self, valid_set, epoch, enable):
+         # 1) Call the standard (parent) training loop
+        super()._fit_valid(valid_set, epoch, enable)
         """Custom validation loop that passes dataset to on_stage_end()."""
-        if valid_set is not None:
-            self.on_stage_start(sb.Stage.VALID, epoch)
-            self.modules.eval()
-            avg_valid_loss = 0.0
-            with torch.no_grad():
-                for batch in tqdm(valid_set, disable=not enable, dynamic_ncols=True):
-                    self.step += 1
-                    loss = self.evaluate_batch(batch, stage=sb.Stage.VALID)
-                    avg_valid_loss = self.update_average(loss, avg_valid_loss)
-
-                    if self.debug and self.step == self.debug_batches:
-                        break
-
-            self.step = 0
-            self.on_stage_end(sb.Stage.VALID, avg_valid_loss, epoch, dataset=valid_set)
-            self.avg_valid_loss = 0.0
+        if sb.utils.distributed.if_main_process():
+            self.log_unsupervies_metrics(stage=sb.Stage.VALID, epoch=epoch, dataset=valid_set)
 
     def compute_forward(self, mix, targets, stage, noise=None):
         """Forward computations from the mixture to the separated signals."""
@@ -149,7 +138,7 @@ class Separation(sb.Brain):
             print(f"[ERROR] Failed to concatenate targets: {e}")
 
             # Create a directory to save error samples
-            error_dir = "error_samples"
+            error_dir = "/export/fs05/afrumme1/sepformer_training/still_sonic_set_v1_reverb_sources_noisy_decomp_mix_results_metrics_log_errors"
             os.makedirs(error_dir, exist_ok=True)
 
             # Save mix waveform
@@ -331,7 +320,7 @@ class Separation(sb.Brain):
 
         return loss.mean().detach()
 
-    def compute_unseparation(self, predictions):
+    def compute_unseparation(self, predictions, stage):
         """
         Computes the unseparation metric based on the correlation between estimated sources.
         
@@ -373,7 +362,9 @@ class Separation(sb.Brain):
         ellip_mse_list = []
         ellip_corr_list = []
         
-        window_sizes = [2048, 4096, 8192]
+        #window_sizes = [2048, 4096, 8192]
+        window_sizes = [4096]
+
         # We'll keep a dictionary of lists, keyed by window_size.
         leakage_means_per_utterance = {ws: [] for ws in window_sizes}
         leakage_max_per_utterance   = {ws: [] for ws in window_sizes}
@@ -407,7 +398,7 @@ class Separation(sb.Brain):
                     )
 
                     # Compute Unseparation Metric
-                    unseparation_score = self.compute_unseparation(predictions)
+                    unseparation_score = self.compute_unseparation(predictions, stage)
 
                     all_sdrs.append(sdr.mean())
                     all_unseparation_values.append(unseparation_score)
@@ -418,7 +409,7 @@ class Separation(sb.Brain):
 
                         for ws in window_sizes:
                             # get all window correlations
-                            corrs = compute_leakage_for_pair(pred_spk1, pred_spk2, ws)
+                            corrs = compute_leakage_for_pair(pred_spk1, pred_spk2, ws, stage)
                             if len(corrs) > 0:
                                 leakage_means_per_utterance[ws].append(np.nanmean(corrs))
                                 leakage_max_per_utterance[ws].append(np.nanmax(corrs))
@@ -482,12 +473,13 @@ class Separation(sb.Brain):
         }
         return metrics_dict  # You can return both if needed
     
-    def on_stage_end(self, stage, stage_loss, epoch, dataset=None):
+    def log_unsupervies_metrics(self, stage, epoch, dataset=None):
         """Gets called at the end of a epoch."""
         # Compute/store important stats
-        stage_stats = {"si-snr": stage_loss}
+        stage_stats = {}
             # Compute custom metrics for validation and test stages
-        if dataset is not None:
+        #if (stage == sb.Stage.VALID or stage == sb.Stage.TEST) and dataset is not None:
+        if True:
             all_metrics = self.compute_metric(dataset, stage)
             # Merge relevant keys
             stage_stats["sdr"] = all_metrics["sdr"]
@@ -507,32 +499,57 @@ class Separation(sb.Brain):
         if sb.utils.distributed.if_main_process():  
             if stage == sb.Stage.VALID:
                 # Learning rate annealing
-                if isinstance(
-                    self.hparams.lr_scheduler, schedulers.ReduceLROnPlateau
-                ):
-                    current_lr, next_lr = self.hparams.lr_scheduler(
-                        [self.optimizer], epoch, stage_loss
-                    )
-                    schedulers.update_learning_rate(self.optimizer, next_lr)
-                else:
-                    # if we do not use the reducelronplateau, we do not change the lr
-                    current_lr = self.hparams.optimizer.optim.param_groups[0]["lr"]
-                    unsep_value = stage_stats.get("unseparation", None)
-                    unsep_str = f"{unsep_value:.4f}" if isinstance(unsep_value, (int, float)) else "N/A"
                 self.hparams.train_logger.log_stats(
-                    stats_meta={"epoch": epoch, "lr": current_lr},
-                    train_stats=self.train_stats,
-                    valid_stats=stage_stats,
+                    stats_meta={"epoch": epoch},
+                    valid_stats=stage_stats
                 )
-                self.checkpointer.save_and_keep_only(
-                    meta={"si-snr": stage_stats["si-snr"]}, min_keys=["si-snr"]
-                )
+                # self.checkpointer.save_and_keep_only(
+                #     meta={"si-snr": stage_stats["si-snr"]}, min_keys=["si-snr"]
+                # )
             elif stage == sb.Stage.TEST:
                 self.hparams.train_logger.log_stats(
                     stats_meta={"Epoch loaded": self.hparams.epoch_counter.current},
-                    test_stats=stage_stats,
+                    test_stats=stage_stats
                 )
 
+    def on_stage_end(self, stage, stage_loss, epoch):
+        """Gets called at the end of a epoch."""
+        # Compute/store important stats
+        stage_stats = {"si-snr": stage_loss}
+        if stage == sb.Stage.TRAIN:
+            self.train_stats = stage_stats
+            self.hparams.train_logger.log_stats(
+                stats_meta={"epoch": epoch},
+                train_stats=self.train_stats
+            )
+
+        # Perform end-of-iteration things, like annealing, logging, etc.
+        if stage == sb.Stage.VALID:
+            # Learning rate annealing
+            if isinstance(
+                self.hparams.lr_scheduler, schedulers.ReduceLROnPlateau
+            ):
+                current_lr, next_lr = self.hparams.lr_scheduler(
+                    [self.optimizer], epoch, stage_loss
+                )
+                schedulers.update_learning_rate(self.optimizer, next_lr)
+            else:
+                # if we do not use the reducelronplateau, we do not change the lr
+                current_lr = self.hparams.optimizer.optim.param_groups[0]["lr"]
+            self.hparams.train_logger.log_stats(
+                stats_meta={"epoch": epoch, "lr": current_lr},
+                train_stats=self.train_stats,
+                valid_stats=stage_stats,
+            )
+            self.checkpointer.save_and_keep_only(
+                meta={"si-snr": stage_stats["si-snr"]}, min_keys=["si-snr"]
+            )
+        elif stage == sb.Stage.TEST:
+            self.hparams.train_logger.log_stats(
+                stats_meta={"Epoch loaded": self.hparams.epoch_counter.current},
+                test_stats=stage_stats,
+            )
+            
     def add_speed_perturb(self, targets, targ_lens):
         """Adds speed perturbation and random_shift to the input signals"""
 
@@ -803,6 +820,49 @@ def dataio_prep(hparams):
 
     return train_data, valid_data, test_data
 
+def check_sample(idx, dataset, num_spks):
+    """
+    Checks a single sample for problematic targets.
+    
+    Returns:
+      - None if the sample is OK.
+      - A tuple (idx, spk_idx) if the target for speaker spk_idx is empty.
+      - A tuple (idx, "missing key", key) if an expected key is missing.
+      - A tuple (idx, "exception", str(e)) if any other exception occurs.
+    """
+    try:
+        sample = dataset[idx]
+        # Iterate over expected number of speakers (assuming keys are s1_sig, s2_sig, etc.)
+        for i in range(num_spks):
+            key = f's{i+1}_sig'
+            if key not in sample:
+                return (idx, "missing key", key)
+            target = sample[key]
+            if target.numel() == 0:
+                return (idx, i)
+        return None  # sample is valid
+    except Exception as e:
+        return (idx, "exception", str(e))
+
+def scan_problematic_samples(dataset, num_spks, num_workers=4):
+    """
+    Scans the entire dataset using a ThreadPoolExecutor.
+    
+    Returns a list of problematic sample indicators.
+    """
+    problematic_samples = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = {
+            executor.submit(check_sample, idx, dataset, num_spks): idx
+            for idx in range(len(dataset))
+        }
+        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Scanning samples"):
+            result = future.result()
+            if result is not None:
+                print(f"[WARNING] Problematic sample found: {result}",flush=True)
+                problematic_samples.append(result)
+    return problematic_samples
+
 
 if __name__ == "__main__":
     # Load hyperparameters file with command-line overrides
@@ -901,7 +961,40 @@ if __name__ == "__main__":
         _, valid_data, test_data = dataio_prep(hparams)
     else:
         train_data, valid_data, test_data = dataio_prep(hparams)
+        print("in else - no dynamic mixing")
 
+
+    # # Example: Print a sample from train_data for debugging.
+    # print(f"train_data[0]: {train_data[0]}")
+    # print(f"Original training set size: {len(train_data)}")
+    
+    # print("Scanning training data for problematic samples using multiprocessing...")
+    # bad_samples_train = scan_problematic_samples(train_data, hparams["num_spks"], num_workers=8)
+    # if bad_samples_train:
+    #     print(f"Found {len(bad_samples_train)} problematic samples in the training set:")
+    #     for item in bad_samples_train:
+    #         print(item)
+    # else:
+    #     print("No problematic samples found in the training set.")
+    
+    # print("Scanning validation data for problematic samples...")
+    # bad_samples_valid = scan_problematic_samples(valid_data, hparams["num_spks"], num_workers=8)
+    # if bad_samples_valid:
+    #     print(f"Found {len(bad_samples_valid)} problematic samples in the validation set:")
+    #     for item in bad_samples_valid:
+    #         print(item)
+    # else:
+    #     print("No problematic samples found in the validation set.")
+    
+    # print("Scanning test data for problematic samples...")
+    # bad_samples_test = scan_problematic_samples(test_data, hparams["num_spks"], num_workers=8)
+    # if bad_samples_test:
+    #     print(f"Found {len(bad_samples_test)} problematic samples in the test set:")
+    #     for item in bad_samples_test:
+    #         print(item)
+    # else:
+    #     print("No problematic samples found in the test set.")
+        
     # Load pretrained model if pretrained_separator is present in the yaml
     if "pretrained_separator" in hparams:
         run_on_main(hparams["pretrained_separator"].collect_files)
